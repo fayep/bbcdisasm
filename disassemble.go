@@ -423,7 +423,7 @@ func (d *Disassembler) decode(op Opcode, bytes []byte, cursor uint) string {
 		if dvar, ok := d.lookupVar(uint(bytes[1])); ok {
 			return "(" + dvar + ")"
 		}
-		return fmt.Sprintf("(&%02X)")
+		return fmt.Sprintf("(&%02X)", bytes[1])
 	default:
 		return "UNKNOWN ADDRESS MODE"
 	}

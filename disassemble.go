@@ -342,7 +342,7 @@ func (d *Disassembler) decode(op Opcode, bytes []byte, cursor uint) string {
 		return genAbsoluteOsCall(bytes, d.branchTargets)
 	}
 	if op.branchOrJump() == btBranch {
-		return genBranch(bytes, cursor, d.BranchAdjust, d.branchTargets)
+		return genBranch(bytes, cursor, d.BranchAdjust, d.branchTargets, op.Length)
 	}
 
 	switch op.AddrMode {
@@ -386,6 +386,11 @@ func (d *Disassembler) decode(op Opcode, bytes []byte, cursor uint) string {
 			return dvar + ",Y"
 		}
 		return fmt.Sprintf("&%02X,Y", bytes[1])
+	case ZeroPageRel:
+		if dvar, ok := d.lookupVar(uint(bytes[1])); ok {
+			return fmt.Sprintf("%s, #%02x", dvar, bytes[2])
+		}
+		return fmt.Sprintf("&%02X,#%02X", bytes[1], bytes[2])
 	case Indirect:
 		val := (uint(bytes[2]) << 8) + uint(bytes[1])
 		if dvar, ok := d.lookupVar(val); ok {
@@ -414,6 +419,11 @@ func (d *Disassembler) decode(op Opcode, bytes []byte, cursor uint) string {
 			return "(" + dvar + "),Y"
 		}
 		return fmt.Sprintf("(&%02X),Y", bytes[1])
+	case IndirectZP:
+		if dvar, ok := d.lookupVar(uint(bytes[1])); ok {
+			return "(" + dvar + ")"
+		}
+		return fmt.Sprintf("(&%02X)")
 	default:
 		return "UNKNOWN ADDRESS MODE"
 	}
@@ -444,12 +454,15 @@ func (d *Disassembler) findBranchTargets() {
 			case btBranch:
 				// This is ugly but it will do for now
 				boff := int(instruction[1]) // All branches are 2 bytes long
+				if op.Length == 3 {
+					boff = int(instruction[2])
+				}
 				if boff > 127 {
 					boff = boff - 256
 				}
 				// Adjust d.Offset to account for the 2 byte behavior, see
 				// genBranch().
-				boff += 2
+				boff += int(op.Length)
 
 				tgt := cursor + uint(boff) + d.BranchAdjust
 				if _, ok := d.branchTargets[tgt]; !ok {

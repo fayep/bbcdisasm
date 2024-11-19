@@ -17,11 +17,13 @@ type AddressingMode int
 //  ZeroPage    - using a fixed zero page address             - LDA &12
 //  ZeroPageX   - using zero page address+X                   - LDA &12,X
 //  ZeroPageY   - using zero page address+Y (LDX only)        - LDX &12,Y
+//  ZeroPageRel - using zero page address+immediate value     - BBR6 &12, #34
 //  Indirect    - using an address stored in memory           - LDA (&1234)
 //  AbsoluteX   - using an absolute address+X                 - LDA &1234,X
 //  AbsoluteY   - using an absolute address+Y                 - LDA &1234,Y
 //  IndirectX   - a table of zero page addresses indexed by X - LDA (&80,X)
 //  IndirectY   - a table of zero page addresses indexed by Y - LDA (&80,Y)
+//  IndirectZP  - An indirect zero page address
 const (
 	None AddressingMode = iota
 	Accumulator
@@ -30,11 +32,13 @@ const (
 	ZeroPage
 	ZeroPageX
 	ZeroPageY
+	ZeroPageRel
 	Indirect
 	AbsoluteX
 	AbsoluteY
 	IndirectX
 	IndirectY
+	IndirectZP
 )
 
 // Opcode defines a 6502 opcode
@@ -66,6 +70,7 @@ var (
 		{0x79, "ADC", 3, AbsoluteY},
 		{0x61, "ADC", 2, IndirectX},
 		{0x71, "ADC", 2, IndirectY},
+		{0x72, "ADC", 2, IndirectZP},
 
 		{0x0B, "ANC", 2, Immediate},
 		{0x2B, "ANC", 2, Immediate},
@@ -78,12 +83,30 @@ var (
 		{0x39, "AND", 3, AbsoluteY},
 		{0x21, "AND", 2, IndirectX},
 		{0x31, "AND", 2, IndirectY},
+		{0x32, "AND", 2, IndirectZP},
 
 		{0x0A, "ASL", 1, Accumulator},
 		{0x06, "ASL", 2, ZeroPage},
 		{0x16, "ASL", 2, ZeroPageX},
 		{0x0E, "ASL", 3, Absolute},
 		{0x1E, "ASL", 3, AbsoluteX},
+
+		{0x0F, "BBR0", 3, None},
+		{0x1F, "BBR1", 3, None},
+		{0x2F, "BBR2", 3, None},
+		{0x3F, "BBR3", 3, None},
+		{0x4F, "BBR4", 3, None},
+		{0x5F, "BBR5", 3, None},
+		{0x6F, "BBR6", 3, None},
+		{0x7F, "BBR7", 3, None},
+		{0x8F, "BBS0", 3, None},
+		{0x9F, "BBS1", 3, None},
+		{0xAF, "BBS2", 3, None},
+		{0xBF, "BBS3", 3, None},
+		{0xCF, "BBS4", 3, None},
+		{0xDF, "BBS5", 3, None},
+		{0xEF, "BBS6", 3, None},
+		{0xFF, "BBS7", 3, None},
 
 		{0x24, "BIT", 2, ZeroPage},
 		{0x2C, "BIT", 3, Absolute},
@@ -92,6 +115,7 @@ var (
 		{0x30, "BMI", 2, None}, // printing
 		{0x50, "BVC", 2, None},
 		{0x70, "BVS", 2, None},
+		{0x80, "BRA", 2, None},
 		{0x90, "BCC", 2, None},
 		{0xB0, "BCS", 2, None},
 		{0xD0, "BNE", 2, None},
@@ -195,6 +219,16 @@ var (
 		{0x88, "DEY", 1, None},
 		{0xC8, "INY", 1, None},
 
+		{0x07, "RMB0", 2, ZeroPage},
+		{0x17, "RMB1", 2, ZeroPage},
+		{0x27, "RMB2", 2, ZeroPage},
+		{0x37, "RMB3", 2, ZeroPage},
+		{0x47, "RMB4", 2, ZeroPage},
+		{0x57, "RMB5", 2, ZeroPage},
+		{0x67, "RMB6", 2, ZeroPage},
+		{0x77, "RMB7", 2, ZeroPage},
+
+
 		{0x2A, "ROL", 1, Accumulator},
 		{0x26, "ROL", 2, ZeroPage},
 		{0x36, "ROL", 2, ZeroPageX},
@@ -220,6 +254,16 @@ var (
 		{0xE1, "SBC", 2, IndirectX},
 		{0xF1, "SBC", 2, IndirectY},
 
+		{0x87, "SMB0", 2, ZeroPage},
+		{0x97, "SMB1", 2, ZeroPage},
+		{0xA7, "SMB2", 2, ZeroPage},
+		{0xB7, "SMB3", 2, ZeroPage},
+		{0xC7, "SMB4", 2, ZeroPage},
+		{0xD7, "SMB5", 2, ZeroPage},
+		{0xE7, "SMB6", 2, ZeroPage},
+		{0xF7, "SMB7", 2, ZeroPage},
+
+/*
 		{0x47, "SRE", 2, ZeroPage},
 		{0x57, "SRE", 2, ZeroPageX},
 		{0x4F, "SRE", 3, Absolute},
@@ -227,6 +271,7 @@ var (
 		{0x5B, "SRE", 3, AbsoluteY},
 		{0x43, "SRE", 2, IndirectX},
 		{0x53, "SRE", 2, IndirectY},
+*/
 
 		{0x85, "STA", 2, ZeroPage},
 		{0x95, "STA", 2, ZeroPageX},
@@ -243,6 +288,7 @@ var (
 		{0x08, "PHP", 1, None},
 		{0x28, "PLP", 1, None},
 
+/*
 		{0x07, "SLO", 2, ZeroPage},
 		{0x17, "SLO", 2, ZeroPageX},
 		{0x0F, "SLO", 3, Absolute},
@@ -250,6 +296,7 @@ var (
 		{0x1B, "SLO", 3, AbsoluteY},
 		{0x03, "SLO", 2, IndirectX},
 		{0x13, "SLO", 2, IndirectY},
+*/
 
 		{0x86, "STX", 2, ZeroPage},
 		{0x96, "STX", 2, ZeroPageY},
@@ -267,7 +314,7 @@ var (
 	// that are included in OpCodesMap.
 	UndocumentedInstructions = []string{"ANC", "SRE", "SLO"}
 
-	branchInstructions = []string{"BPL", "BMI", "BVC", "BVS", "BCC", "BCS", "BNE", "BEQ"}
+	branchInstructions = []string{"BPL", "BMI", "BVC", "BRA", "BVS", "BCC", "BCS", "BNE", "BEQ", "BBR0", "BBR1", "BBR2", "BBR3", "BBR4", "BBR5", "BBR6", "BBR7", "BBS0", "BBS1", "BBS2", "BBS3", "BBS4", "BBS5", "BBS6", "BBS7"}
 
 	jumpInstructions = []string{"JMP", "JSR"}
 
@@ -368,19 +415,23 @@ func genAbsoluteOsCall(bytes []byte, branchTargets map[uint]int) string {
 	return fmt.Sprintf("&%04X", addr)
 }
 
-func genBranch(bytes []byte, cursor, branchAdjust uint, branchTargets map[uint]int) string {
+func genBranch(bytes []byte, cursor, branchAdjust uint, branchTargets map[uint]int, length uint) string {
 	// From http://www.6502.org/tutorials/6502opcodes.html
 	// "When calculating branches a forward branch of 6 skips the following 6
 	// bytes so, effectively the program counter points to the address that is 8
 	// bytes beyond the address of the branch opcode; and a backward branch of
 	// $FA (256-6) goes to an address 4 bytes before the branch instruction."
 	boff := int(bytes[1]) // All branches are 2 bytes long
+	if length == 3 {
+		boff = int(bytes[2])
+	}
+
 	if boff > 127 {
 		boff = boff - 256
 	}
 	// Adjust offset to account for the 2 byte behavior from the comment block
 	// above.
-	boff += 2
+	boff += int(length)
 
 	tgt := cursor + uint(boff) + branchAdjust
 	// TODO: Explore branch relative offset in the end of line comment
@@ -391,7 +442,13 @@ func genBranch(bytes []byte, cursor, branchAdjust uint, branchTargets map[uint]i
 		// the branch with the relative offset. However beebasm interprets an
 		// integer literal as an absolute address, so instead write out an
 		// expression that generates the same opcodes, e.g. P%+12 or P%-87
+		if length == 3 {
+			return fmt.Sprintf("&%02X,P%%%+d", bytes[1], boff)
+		}
 		return fmt.Sprintf("P%%%+d", boff)
+	}
+	if length == 3 {
+		return fmt.Sprintf("&%02X,"+labelFormatString, bytes[1], tgtIdx)
 	}
 	return fmt.Sprintf(labelFormatString, tgtIdx)
 }
